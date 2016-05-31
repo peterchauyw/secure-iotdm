@@ -36,6 +36,7 @@ and is available at http://www.eclipse.org/legal/epl-v10.html
           <artifactId>jetty-all-server</artifactId>
           <!--<version>8.1.14.v20131031</version>-->
           <version>8.1.15.v20140411</version>
+          <!--<version>9.3.8.v20160314</version>-->
       </dependency>
       <dependency>
           <groupId>org.apache.commons</groupId>
@@ -43,5 +44,17 @@ and is available at http://www.eclipse.org/legal/epl-v10.html
           <version>1.3.2</version>
       </dependency>
   </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/java/org/opendaylight/iotdm/onem2m/protocols/http/certs</directory>
+                <targetPath>certs</targetPath>
+                <includes>
+                    <include>*.jks</include>
+                </includes>
+            </resource>
+        </resources>
+    </build>
 
 </project>

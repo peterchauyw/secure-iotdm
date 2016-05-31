@@ -9,16 +9,31 @@
 package org.opendaylight.iotdm.onem2m.protocols.http;
 
 import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.security.KeyStore;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
 import org.eclipse.jetty.client.ContentExchange;
 import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.io.AsyncEndPoint;
+import org.eclipse.jetty.io.Connection;
+import org.eclipse.jetty.io.nio.SslConnection;
+import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.eclipse.jetty.server.nio.SelectChannelConnector;
+import org.eclipse.jetty.server.ssl.SslSelectChannelConnector;
+import org.eclipse.jetty.server.ssl.SslSocketConnector;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.opendaylight.controller.sal.binding.api.BindingAwareBroker.ProviderContext;
 import org.opendaylight.controller.sal.binding.api.BindingAwareProvider;
 import org.opendaylight.iotdm.onem2m.client.Onem2mRequestPrimitiveClientBuilder;
@@ -37,9 +52,23 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
 
     private static final Logger LOG = LoggerFactory.getLogger(Onem2mHttpProvider.class);
     protected Onem2mService onem2mService;
-    private Server server;
+    private Server nonsecureServer;
+    private Server secureServer;
     private final int PORT = 8282;
     private HttpClient client;
+
+    private final int securePORT = 8443;
+    private static final String TRUST_STORE_PASSWORD = "storepwd";
+    private static final String KEY_STORE_PASSWORD = "storepwd";
+    private static final String KEY_STORE_LOCATION = "certs/jettykeystore";
+    private static final String TRUST_STORE_LOCATION = "certs/jettykeystore";
+    private static final String KEY_MANAGER_PASSWORD = "keypwd";
+
+    static SSLContext __sslContext;
+    private static final AtomicInteger _handlecount = new AtomicInteger();
+
+
+
 
     @Override
     public void onSessionInitiated(ProviderContext session) {
@@ -47,7 +76,8 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
         Onem2mNotifierService.getInstance().pluginRegistration(this);
 
         try {
-            server.start();
+            nonsecureServer.start();
+            secureServer.start();
             client.start();
         } catch (Exception e) {
             LOG.info("Exception: {}", e.toString());
@@ -57,15 +87,98 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
 
     @Override
     public void close() throws Exception {
-        server.stop();
+        nonsecureServer.stop();
+        secureServer.stop();
         client.stop();
         LOG.info("Onem2mHttpProvider Closed");
     }
 
-    public Onem2mHttpProvider() {
-        server = new Server(PORT);
-        server.setHandler(new MyHandler());
+    public Onem2mHttpProvider(){
+        nonsecureServer = new Server();
+        secureServer = new Server();
+        SelectChannelConnector connector = new SelectChannelConnector();
+        connector.setPort(PORT);
+
+
+
+
+
+
+
+
+
+
+
+        SslSelectChannelConnector ssl_connector = new SslSelectChannelConnector()
+        {
+            @Override
+            protected SslConnection newSslConnection(AsyncEndPoint endPoint, SSLEngine engine)
+            {
+                return new SslConnection(engine, endPoint)
+                {
+                    @Override
+                    public Connection handle() throws IOException
+                    {
+                        _handlecount.incrementAndGet();
+                        return super.handle();
+                    }
+                };
+            }
+        };
+
+        ssl_connector.setPort(securePORT);
+        SslContextFactory cf = ssl_connector.getSslContextFactory();
+        cf.setKeyStorePath(KEY_STORE_LOCATION);
+        cf.setKeyStorePassword(KEY_STORE_PASSWORD);
+        cf.setTrustAll(true);
+//        cf.setTrustStore(TRUST_STORE_LOCATION);
+//        cf.setTrustStorePassword(TRUST_STORE_PASSWORD);
+//        cf.setIncludeProtocols("TLSv1.2");
+        cf.setKeyManagerPassword(KEY_MANAGER_PASSWORD);
+        ssl_connector.setUseDirectBuffers(true);
+//        cf.setNeedClientAuth(false);
+//        cf.setWantClientAuth(false);
+
+        nonsecureServer.setConnectors(new Connector[]{ connector });
+        nonsecureServer.addConnector(ssl_connector);
+        nonsecureServer.setHandler(new MyHandler());
+
+//        secureServer.setConnectors(new Connector[]{ ssl_connector });
+//        secureServer.addConnector(ssl_connector);
+//        secureServer.setHandler(new MyHandler());
         client = new HttpClient();
+
+
+
+
+
+
+
+
+
+        try{
+        KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keystore.load(new FileInputStream(KEY_STORE_LOCATION), "storepwd".toCharArray());
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        trustManagerFactory.init(keystore);
+        __sslContext = SSLContext.getInstance("TLS");
+        __sslContext.init(null, trustManagerFactory.getTrustManagers(), null);
+
+
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, SslContextFactory.TRUST_ALL_CERTS, new java.security.SecureRandom());
+            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+        }
+        catch(Exception e)
+        {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+
+
+
+
+
 
     }
 

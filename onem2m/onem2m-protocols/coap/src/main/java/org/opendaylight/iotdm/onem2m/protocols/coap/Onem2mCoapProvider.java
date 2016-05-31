@@ -10,10 +10,32 @@ package org.opendaylight.iotdm.onem2m.protocols.coap;
 
 import org.eclipse.californium.core.CoapResource;
 import org.eclipse.californium.core.CoapServer;
-import org.eclipse.californium.core.coap.*;
 import org.eclipse.californium.core.network.Exchange;
 import org.eclipse.californium.core.server.resources.CoapExchange;
 import org.eclipse.californium.core.server.resources.Resource;
+import org.eclipse.californium.core.coap.*;
+import org.eclipse.californium.core.coap.CoAP.ResponseCode;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.util.logging.Level;
+
+import org.eclipse.californium.core.CaliforniumLogger;
+import org.eclipse.californium.scandium.DTLSConnector;
+import org.eclipse.californium.scandium.ScandiumLogger;
+import org.eclipse.californium.scandium.config.DtlsConnectorConfig;
+import org.eclipse.californium.core.network.CoapEndpoint;
+import org.eclipse.californium.core.network.Endpoint;
+import org.eclipse.californium.core.network.config.NetworkConfig;
+import org.eclipse.californium.core.network.interceptors.MessageTracer;
+import org.eclipse.californium.scandium.dtls.cipher.CipherSuite;
+import org.eclipse.californium.scandium.dtls.pskstore.InMemoryPskStore;
 
 import org.opendaylight.controller.sal.binding.api.BindingAwareBroker.ProviderContext;
 import org.opendaylight.controller.sal.binding.api.BindingAwareProvider;
@@ -28,32 +50,113 @@ import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.iotdm.on
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Onem2mCoapProvider extends CoapServer implements Onem2mNotifierPlugin, BindingAwareProvider, AutoCloseable {
+public class Onem2mCoapProvider implements Onem2mNotifierPlugin, BindingAwareProvider, AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(Onem2mCoapProvider.class);
     protected Onem2mService onem2mService;
+    private oneM2MCoapServer secureServer;
+    private oneM2MCoapServer nonSecureServer;
+    static {
+        CaliforniumLogger.initialize();
+        CaliforniumLogger.setLevel(Level.CONFIG);
+        ScandiumLogger.initialize();
+        ScandiumLogger.setLevel(Level.FINER);
+    }
+
+    // allows configuration via Californium.properties
+    public static final int DTLS_PORT = NetworkConfig.getStandard().getInt(NetworkConfig.Keys.COAP_SECURE_PORT);
+
+    private static final String TRUST_STORE_PASSWORD = "rootPass";
+    private final static String KEY_STORE_PASSWORD = "endPass";
+    private static final String KEY_STORE_LOCATION = "certs/keyStore.jks";
+    private static final String TRUST_STORE_LOCATION = "certs/trustStore.jks";
 
     @Override
     public void onSessionInitiated(ProviderContext session) {
         onem2mService = session.getRpcService(Onem2mService.class);
         Onem2mNotifierService.getInstance().pluginRegistration(this);
 
-        start();
+        startNonSecureServer();
+        startSecureServer();
+
         LOG.info("Onem2mCoapProvider Session Initiated");
     }
 
     @Override
     public void close() throws Exception {
+        nonSecureServer.stop();
+        secureServer.stop();
         LOG.info("Onem2mCoapProvider Closed");
     }
 
-    /**
-     * Intercept the coap URL query.
-     */
-    @Override
-    public Resource createRoot() {
-        return new RootResource();
+    private void startSecureServer() {
+        secureServer = new oneM2MCoapServer();
+//        secureServer.add(new CoapResource("secure") {
+//            @Override
+//            public void handleGET(CoapExchange exchange) {
+//                exchange.respond(ResponseCode.CONTENT, "hello security");
+//            }
+//        });
+
+        try {
+            // Pre-shared secrets
+            InMemoryPskStore pskStore = new InMemoryPskStore();
+            pskStore.setKey("password", "sesame".getBytes()); // from ETSI Plugtest test spec
+
+            // load the trust store
+            KeyStore trustStore = KeyStore.getInstance("JKS");
+            InputStream inTrust = new FileInputStream(TRUST_STORE_LOCATION);
+            trustStore.load(inTrust, TRUST_STORE_PASSWORD.toCharArray());
+
+            // You can load multiple certificates if needed
+            Certificate[] trustedCertificates = new Certificate[1];
+            trustedCertificates[0] = trustStore.getCertificate("root");
+
+            // load the key store
+            KeyStore keyStore = KeyStore.getInstance("JKS");
+            InputStream in = new FileInputStream(KEY_STORE_LOCATION);
+            keyStore.load(in, KEY_STORE_PASSWORD.toCharArray());
+
+            DtlsConnectorConfig.Builder config = new DtlsConnectorConfig.Builder(new InetSocketAddress(DTLS_PORT));
+            config.setSupportedCipherSuites(new CipherSuite[]{CipherSuite.TLS_PSK_WITH_AES_128_CCM_8,
+                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8});
+            config.setPskStore(pskStore);
+            config.setIdentity((PrivateKey)keyStore.getKey("server", KEY_STORE_PASSWORD.toCharArray()),
+                    keyStore.getCertificateChain("server"), true);
+            config.setTrustStore(trustedCertificates);
+
+            DTLSConnector connector = new DTLSConnector(config.build());
+
+            secureServer.addEndpoint(new CoapEndpoint(connector, NetworkConfig.getStandard()));
+            secureServer.start();
+
+        } catch (GeneralSecurityException | IOException e) {
+            System.err.println("Could not load the keystore");
+            e.printStackTrace();
+        }
+
+        // add special interceptor for message traces
+        for (Endpoint ep : secureServer.getEndpoints()) {
+            ep.addInterceptor(new MessageTracer());
+        }
+        System.out.println("Secure CoAP server powered by Scandium (Sc) is listening on port " + DTLS_PORT);
     }
+
+    private void startNonSecureServer() {
+        nonSecureServer = new oneM2MCoapServer();
+        nonSecureServer.start();
+    }
+
+    private class oneM2MCoapServer extends CoapServer{
+        /**
+         * Intercept the coap URL query.
+         */
+        @Override
+        public Resource createRoot() {
+            return new RootResource();
+        }
+    }
+
 
     private class RootResource extends CoapResource {
         public RootResource() {
@@ -102,14 +205,14 @@ public class Onem2mCoapProvider extends CoapServer implements Onem2mNotifierPlug
                 //return;
             }
 
-            clientBuilder.setTo(options.getURIPathString()); // To/TargetURI
+            clientBuilder.setTo(options.getUriPathString()); // To/TargetURI
             // M3 clientBuilder.setTo(options.getUriPathString()); // To/TargetURI // M3
 
             processOptions(options, clientBuilder); // pull options out of coap header fields
 
             // according to the spec, the uri query string can contain in short form, the
             // resourceType, responseType, result persistence,  Delivery Aggregation, Result Content,
-            Boolean resourceTypePresent = clientBuilder.parseQueryStringIntoPrimitives(options.getURIQueryString());
+            Boolean resourceTypePresent = clientBuilder.parseQueryStringIntoPrimitives(options.getUriQueryString());
             // M3 Boolean resourceTypePresent = clientBuilder.parseQueryStringIntoPrimitives(options.getUriQueryString());
             if (resourceTypePresent && code != CoAP.Code.POST) {
                 coapExchange.respond(CoAP.ResponseCode.BAD_REQUEST, "Specifying resource type not permitted.");
@@ -287,4 +390,6 @@ public class Onem2mCoapProvider extends CoapServer implements Onem2mNotifierPlug
         request.send();
         LOG.debug("CoAP: Send notification uri: {}, payload: {}:", url, payload);
     }
+
+
 }

@@ -274,6 +274,7 @@ public class RequestPrimitiveProcessor extends RequestPrimitive {
         } else {
             onem2mResponse.setRSC(Onem2m.ResponseStatusCode.BAD_REQUEST,
                     "REQUEST_IDENTIFIER(" + RequestPrimitive.REQUEST_IDENTIFIER + ") not specified");
+            return;
         }
 
         // make sure the attributes exist
@@ -333,10 +334,12 @@ public class RequestPrimitiveProcessor extends RequestPrimitive {
         }
 
         String from = getPrimitive(RequestPrimitive.FROM);
-        if (from == null && !resourceType.contentEquals(Onem2m.ResourceType.AE)) {
-            onem2mResponse.setRSC(Onem2m.ResponseStatusCode.BAD_REQUEST,
-                    "FROM(" + RequestPrimitive.FROM + ") not specified");
-            return;
+        if (from == null) {
+            if (!resourceType.contentEquals(Onem2m.ResourceType.AE)) {
+                onem2mResponse.setRSC(Onem2m.ResponseStatusCode.BAD_REQUEST,
+                        "FROM(" + RequestPrimitive.FROM + ") not specified");
+                return;
+            }
         } else if (!validateUri(from)) {
             onem2mResponse.setRSC(Onem2m.ResponseStatusCode.BAD_REQUEST,
                     "FROM(" + RequestPrimitive.FROM + ") not valid URI: " + from);

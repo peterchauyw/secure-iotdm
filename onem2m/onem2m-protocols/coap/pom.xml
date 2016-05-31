@@ -34,8 +34,24 @@ and is available at http://www.eclipse.org/legal/epl-v10.html
       <dependency>
           <groupId>org.eclipse.californium</groupId>
           <artifactId>californium-osgi</artifactId>
-          <!--<version>1.0.0-M3</version>-->
-          <version>1.0.0-M1</version>
+          <version>1.0.2</version>
+      </dependency>
+      <dependency>
+          <groupId>org.eclipse.californium</groupId>
+          <artifactId>scandium</artifactId>
+          <version>1.0.2</version>
       </dependency>
   </dependencies>
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/java/org/opendaylight/iotdm/onem2m/protocols/coap/certs</directory>
+                <targetPath>certs</targetPath>
+                <includes>
+                    <include>*.jks</include>
+                </includes>
+            </resource>
+        </resources>
+    </build>
+
 </project>
