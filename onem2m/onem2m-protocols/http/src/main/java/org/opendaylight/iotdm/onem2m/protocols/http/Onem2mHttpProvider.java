@@ -67,9 +67,6 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
     static SSLContext __sslContext;
     private static final AtomicInteger _handlecount = new AtomicInteger();
 
-
-
-
     @Override
     public void onSessionInitiated(ProviderContext session) {
         onem2mService = session.getRpcService(Onem2mService.class);
@@ -98,17 +95,6 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
         secureServer = new Server();
         SelectChannelConnector connector = new SelectChannelConnector();
         connector.setPort(PORT);
-
-
-
-
-
-
-
-
-
-
-
         SslSelectChannelConnector ssl_connector = new SslSelectChannelConnector()
         {
             @Override
@@ -148,14 +134,6 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
 //        secureServer.setHandler(new MyHandler());
         client = new HttpClient();
 
-
-
-
-
-
-
-
-
         try{
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
         keystore.load(new FileInputStream(KEY_STORE_LOCATION), "storepwd".toCharArray());
@@ -174,12 +152,6 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
             e.printStackTrace();
             throw new RuntimeException(e);
         }
-
-
-
-
-
-
     }
 
     public class MyHandler extends AbstractHandler {
