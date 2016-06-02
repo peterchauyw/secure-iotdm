@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Cisco Systems, Inc. and others.  All rights reserved.
+ * Copyright (c) 2015, 2016 Cisco Systems, Inc. and others.  All rights reserved.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 which accompanies this distribution,
@@ -9,13 +9,15 @@
 package org.opendaylight.iotdm.onem2m.core.resource;
 
 import java.util.Iterator;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.opendaylight.iotdm.onem2m.core.Onem2m;
 import org.opendaylight.iotdm.onem2m.core.database.Onem2mDb;
 import org.opendaylight.iotdm.onem2m.core.rest.CheckAccessControlProcessor;
 import org.opendaylight.iotdm.onem2m.core.rest.utils.RequestPrimitive;
 import org.opendaylight.iotdm.onem2m.core.rest.utils.ResponsePrimitive;
-import org.opendaylight.yang.gen.v1.urn.opendaylight.params.xml.ns.yang.iotdm.onem2m.rev150105.onem2m.resource.tree.Onem2mResource;
+import org.opendaylight.iotdm.onem2m.core.utils.JsonUtils;
+import org.opendaylight.iotdm.onem2m.core.utils.Onem2mDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +60,7 @@ public class ResourceContentInstance  {
         } else {
             // record the size of the content in the CONTENT_SIZE attribute
             newByteSize = tempStr.length();
-            resourceContent.getInJsonContent().put(CONTENT_SIZE, newByteSize);
+            JsonUtils.put(resourceContent.getInJsonContent(), CONTENT_SIZE, newByteSize);
         }
 
         JSONObject containerResourceContent = onem2mRequest.getJsonResourceContent();
@@ -66,7 +68,7 @@ public class ResourceContentInstance  {
         // the state tag of the cin is the incremented value of its parent container resource
         Integer containerStateTag = containerResourceContent.optInt(ResourceContent.STATE_TAG);
         containerStateTag++;
-        resourceContent.getInJsonContent().put(ResourceContent.STATE_TAG, containerStateTag);
+        JsonUtils.put(resourceContent.getInJsonContent(), ResourceContent.STATE_TAG, containerStateTag);
 
         // verify this content instance does not exceed the container's max byte size
         Integer mbs = containerResourceContent.optInt(ResourceContainer.MAX_BYTE_SIZE, -1);
@@ -87,6 +89,16 @@ public class ResourceContentInstance  {
                 return;
             }
 
+        }
+
+        // set the ExpirationTime to the minimum value, curruntTime + parent container's maxInstanceAge
+        Integer mia = containerResourceContent.optInt(ResourceContainer.MAX_INSTANCE_AGE, -1);
+        if (mia != -1) {
+            String minExpTime = Onem2mDateTime.addAgeToCurTime(mia);
+            String cinExpTime = onem2mRequest.getResourceContent().getInJsonContent().optString(ResourceContent.EXPIRATION_TIME);
+            if ( cinExpTime!= null && Onem2mDateTime.dateCompare(minExpTime, cinExpTime) < 0) {
+                JsonUtils.put(resourceContent.getInJsonContent(), ResourceContent.EXPIRATION_TIME, minExpTime);
+            }
         }
 
         ResourceContainer.setCurrValuesForThisCreatedContentInstance(onem2mRequest, containerResourceContent,
@@ -128,7 +140,7 @@ public class ResourceContentInstance  {
 
             resourceContent.jsonCreateKeys.add(key);
 
-            Object o = resourceContent.getInJsonContent().get(key);
+            Object o = resourceContent.getInJsonContent().opt(key);
 
             switch (key) {
 
@@ -153,9 +165,6 @@ public class ResourceContentInstance  {
                         onem2mResponse.setRSC(Onem2m.ResponseStatusCode.CONTENTS_UNACCEPTABLE,
                                 "CONTENT(" + RequestPrimitive.CONTENT + ") CREATOR must be null");
                         return;
-                    } else {
-                        resourceContent.getInJsonContent().remove(key);
-                        resourceContent.getInJsonContent().put(key, onem2mRequest.getPrimitive(RequestPrimitive.FROM));
                     }
                     break;
                 case ResourceContent.LABELS:
@@ -172,6 +181,9 @@ public class ResourceContentInstance  {
                     onem2mResponse.setRSC(Onem2m.ResponseStatusCode.CONTENTS_UNACCEPTABLE,
                             "CONTENT(" + RequestPrimitive.CONTENT + ") attribute not recognized: " + key);
                     return;
+            }
+            if (resourceContent.jsonCreateKeys.contains(CREATOR)) {
+                JsonUtils.put(resourceContent.getInJsonContent(), CREATOR, onem2mRequest.getPrimitive(RequestPrimitive.FROM));
             }
         }
     }

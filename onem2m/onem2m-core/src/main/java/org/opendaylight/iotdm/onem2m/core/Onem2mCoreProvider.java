@@ -197,7 +197,6 @@ public class Onem2mCoreProvider implements Onem2mService, Onem2mCoreRuntimeMXBea
             resourceId = null;
         } else {
             String resourceUri = input.getResourceUri().trim();
-            //onem2mRequest.setPrimitive(RequestPrimitive.TO, resourceUri);
             if (!Onem2mDb.getInstance().findResourceUsingURI(resourceUri, onem2mRequest, onem2mResponse)) {
                 LOG.error("Cannot find resourceUri: {}", resourceUri);
                 return Futures.immediateFuture(RpcResultBuilder.<Void>failed().build());
@@ -221,8 +220,8 @@ public class Onem2mCoreProvider implements Onem2mService, Onem2mCoreRuntimeMXBea
 
     /**
      * This is a generic debug function ... it allows input and output parameters
-     * @param input
-     * @return
+     * @param input Onem2mDebugInput
+     * @return returnRPC
      */
     @Override
     public Future<RpcResult<Onem2mDebugOutput>> onem2mDebug(Onem2mDebugInput input) {
