@@ -91,17 +91,8 @@ public class Onem2mCoapProvider implements Onem2mNotifierPlugin, BindingAwarePro
 
     private void startSecureServer() {
         secureServer = new oneM2MCoapServer();
-//        secureServer.add(new CoapResource("secure") {
-//            @Override
-//            public void handleGET(CoapExchange exchange) {
-//                exchange.respond(ResponseCode.CONTENT, "hello security");
-//            }
-//        });
 
         try {
-            // Pre-shared secrets
-            InMemoryPskStore pskStore = new InMemoryPskStore();
-            pskStore.setKey("password", "sesame".getBytes()); // from ETSI Plugtest test spec
 
             // load the trust store
             KeyStore trustStore = KeyStore.getInstance("JKS");
@@ -118,9 +109,7 @@ public class Onem2mCoapProvider implements Onem2mNotifierPlugin, BindingAwarePro
             keyStore.load(in, KEY_STORE_PASSWORD.toCharArray());
 
             DtlsConnectorConfig.Builder config = new DtlsConnectorConfig.Builder(new InetSocketAddress(DTLS_PORT));
-            config.setSupportedCipherSuites(new CipherSuite[]{CipherSuite.TLS_PSK_WITH_AES_128_CCM_8,
-                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8});
-            config.setPskStore(pskStore);
+            config.setSupportedCipherSuites(new CipherSuite[]{CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8});
             config.setIdentity((PrivateKey)keyStore.getKey("server", KEY_STORE_PASSWORD.toCharArray()),
                     keyStore.getCertificateChain("server"), true);
             config.setTrustStore(trustedCertificates);

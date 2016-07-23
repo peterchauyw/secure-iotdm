@@ -56,8 +56,8 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
     private Server secureServer;
     private final int PORT = 8282;
     private HttpClient client;
-
     private final int securePORT = 8443;
+
     private static final String TRUST_STORE_PASSWORD = "storepwd";
     private static final String KEY_STORE_PASSWORD = "storepwd";
     private static final String KEY_STORE_LOCATION = "certs/jettykeystore";
@@ -117,11 +117,14 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
         cf.setKeyStorePath(KEY_STORE_LOCATION);
         cf.setKeyStorePassword(KEY_STORE_PASSWORD);
         cf.setTrustAll(true);
+        cf.setKeyManagerPassword(KEY_MANAGER_PASSWORD);
+        ssl_connector.setUseDirectBuffers(true);
+
+
+
 //        cf.setTrustStore(TRUST_STORE_LOCATION);
 //        cf.setTrustStorePassword(TRUST_STORE_PASSWORD);
 //        cf.setIncludeProtocols("TLSv1.2");
-        cf.setKeyManagerPassword(KEY_MANAGER_PASSWORD);
-        ssl_connector.setUseDirectBuffers(true);
 //        cf.setNeedClientAuth(false);
 //        cf.setWantClientAuth(false);
 
@@ -136,7 +139,7 @@ public class Onem2mHttpProvider implements Onem2mNotifierPlugin, BindingAwarePro
 
         try{
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
-        keystore.load(new FileInputStream(KEY_STORE_LOCATION), "storepwd".toCharArray());
+        keystore.load(new FileInputStream(KEY_STORE_LOCATION), KEY_STORE_PASSWORD.toCharArray());
         TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         trustManagerFactory.init(keystore);
         __sslContext = SSLContext.getInstance("TLS");
